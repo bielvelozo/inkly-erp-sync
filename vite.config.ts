@@ -1,4 +1,6 @@
+import { cloudflare } from "@cloudflare/vite-plugin";
 import { reactRouter } from "@react-router/dev/vite";
+import { fileURLToPath } from "node:url";
 import { defineConfig, type UserConfig } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
 
@@ -35,7 +37,28 @@ if (host === "localhost") {
   };
 }
 
-export default defineConfig({
+// `shopify app dev` passes the app credentials as environment variables of this process;
+// the Worker only sees its own bindings, so in dev they are forwarded as vars (never in a build).
+const SHOPIFY_DEV_VARS = [
+  "SHOPIFY_API_KEY",
+  "SHOPIFY_API_SECRET",
+  "SHOPIFY_APP_URL",
+  "SCOPES",
+  "SHOP_CUSTOM_DOMAIN",
+  "ERP_API_URL",
+  "ERP_API_KEY",
+  "ERP_WEBHOOK_SECRET",
+];
+
+function devVars() {
+  return Object.fromEntries(
+    SHOPIFY_DEV_VARS.flatMap((name) =>
+      process.env[name] ? [[name, process.env[name]!]] : [],
+    ),
+  );
+}
+
+export default defineConfig(({ command }) => ({
   server: {
     allowedHosts: [host],
     cors: {
@@ -45,17 +68,52 @@ export default defineConfig({
     hmr: hmrConfig,
     fs: {
       // See https://vitejs.dev/config/server-options.html#server-fs-allow for more information
-      allow: ["app", "node_modules"],
+      allow: ["app", "workers", "node_modules"],
     },
   },
   plugins: [
+    cloudflare({
+      viteEnvironment: { name: "ssr" },
+      ...(command === "serve" ? { config: { vars: devVars() } } : {}),
+    }),
     reactRouter(),
     tsconfigPaths(),
   ],
+  resolve: {
+    alias: [
+      {
+        // @prisma/client re-exports ".prisma/client/default", which bundlers read as a relative path;
+        // on workerd the right build is the Wasm one (it needs the D1 driver adapter).
+        find: /^\.prisma\/client\/default$/,
+        replacement: fileURLToPath(
+          new URL("./node_modules/.prisma/client/wasm.js", import.meta.url),
+        ),
+      },
+    ],
+  },
   build: {
     assetsInlineLimit: 0,
   },
   optimizeDeps: {
     include: ["@shopify/app-bridge-react"],
   },
-}) satisfies UserConfig;
+  environments: {
+    ssr: {
+      optimizeDeps: {
+        include: [
+          "react",
+          "react/jsx-runtime",
+          "react-dom/server",
+          "react-router",
+          "isbot",
+          "@shopify/app-bridge-react",
+          "@shopify/shopify-app-react-router/react",
+          "@shopify/shopify-app-react-router/server",
+          "@shopify/shopify-app-session-storage-prisma",
+          "@prisma/adapter-d1",
+          "@prisma/client",
+        ],
+      },
+    },
+  },
+}) satisfies UserConfig);

@@ -60,6 +60,10 @@ module.exports = {
       parser: "@typescript-eslint/parser",
       settings: {
         "import/internal-regex": "^~/",
+        "import/core-modules": [
+          "cloudflare:workers",
+          "virtual:react-router/server-build",
+        ],
         "import/resolver": {
           node: {
             extensions: [".ts", ".tsx"],

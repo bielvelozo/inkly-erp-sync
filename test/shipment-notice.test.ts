@@ -17,7 +17,8 @@ describe("parseShipmentNotice", () => {
   });
 
   it("treats a missing tracking URL as null", () => {
-    const { trackingUrl: _omitted, ...withoutUrl } = notice;
+    const withoutUrl: Partial<typeof notice> = { ...notice };
+    delete withoutUrl.trackingUrl;
     expect(parseShipmentNotice(JSON.stringify(withoutUrl))?.trackingUrl).toBeNull();
   });
 

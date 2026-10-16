@@ -117,8 +117,8 @@ export default function SimulatedErp() {
           </s-button>
         </s-stack>
         <s-paragraph>
-          During an outage, new orders fail in the Orders page with the ERP's
-          answer, and can be sent again once the API is back.
+          During an outage, new orders fail in the Orders page with the answer
+          from the ERP, and can be sent again once the API is back.
         </s-paragraph>
       </s-section>
 
