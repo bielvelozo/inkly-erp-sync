@@ -8,7 +8,7 @@
   "line_items": [
     {
       "id": 15934567890123,
-      "title": "Personalized Mug",
+      "title": "Custom mug",
       "variant_title": "White",
       "sku": "MUG-WHITE",
       "quantity": 1,
@@ -16,15 +16,15 @@
       "properties": [
         { "name": "Text", "value": "Good morning, Ana" },
         { "name": "Font", "value": "Pacifico" },
-        { "name": "Color", "value": "#e4572e" },
+        { "name": "Text color", "value": "Orange" },
         { "name": "_Preview", "value": "https://cdn.shopify.com/s/files/preview.png" },
-        { "name": "_Position", "value": "bottom" },
+        { "name": "_Text position", "value": "bottom" },
         { "name": "Photo", "value": "" }
       ]
     },
     {
       "id": 15934567890124,
-      "title": "Gift Box",
+      "title": "Gift box",
       "variant_title": null,
       "sku": "",
       "quantity": 3,

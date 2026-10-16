@@ -25,14 +25,14 @@ describe("toErpOrder", () => {
   it("sends what the buyer typed and drops hidden and empty properties", () => {
     expect(erpOrder.items[0]).toEqual({
       sku: "MUG-WHITE",
-      title: "Personalized Mug",
+      title: "Custom mug",
       variant: "White",
       quantity: 1,
       unitPrice: "24.00",
       customization: {
         Text: "Good morning, Ana",
         Font: "Pacifico",
-        Color: "#e4572e",
+        "Text color": "Orange",
       },
     });
   });

@@ -74,12 +74,15 @@ async function handleRepeatedDelivery(sync: OrderSync, webhookId: string) {
     where: { id: sync.id },
     data: { webhookDeliveries: { increment: 1 } },
   });
+  const failed = sync.status === SyncStatus.Failed;
   await logEvent(
     sync.id,
     EventKind.WebhookRepeated,
-    `Shopify delivered this order again (webhook ${webhookId}); it was not sent twice`,
+    failed
+      ? `Shopify delivered this order again (webhook ${webhookId}); trying the ERP again`
+      : `Shopify delivered this order again (webhook ${webhookId}); already handled, not sent twice`,
   );
-  return sync.status === SyncStatus.Failed ? pushToErp(sync.id) : sync;
+  return failed ? pushToErp(sync.id) : sync;
 }
 
 async function pushToErp(id: number) {
