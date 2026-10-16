@@ -3,7 +3,7 @@
 client_id = "b3ef8e3d2090793c6a6c1dd517644358"
 name = "Inkly ERP Sync"
 handle = "inkly-erp-sync"
-application_url = "https://example.com"
+application_url = "https://inkly-erp-sync.renovo.workers.dev"
 embedded = true
 
 [access_scopes]
@@ -28,8 +28,7 @@ api_version = "2026-07"
   include_fields = ["id", "admin_graphql_api_id", "name", "created_at", "currency", "total_price", "line_items"]
 
 [auth]
-redirect_urls = [ "https://example.com/api/auth" ]
+redirect_urls = [ "https://inkly-erp-sync.renovo.workers.dev/api/auth" ]
 
 [build]
 automatically_update_urls_on_dev = true
-include_config_on_deploy = true

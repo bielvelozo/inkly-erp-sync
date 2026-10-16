@@ -1,6 +1,8 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "inkly-erp-sync",
+  // Personal account; the same wrangler login also reaches an employer account, so the target is pinned.
+  "account_id": "de93f72b484263b304e4a891cbb38de2",
   "main": "./workers/app.ts",
   "compatibility_date": "2026-10-01",
   // global_fetch_strictly_public: the app calls its own public URL (simulated ERP API and its callback),
@@ -10,9 +12,14 @@
     {
       "binding": "DB",
       "database_name": "inkly-erp-sync",
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "331d00c1-3571-4443-a18e-304196c78890",
       "migrations_dir": "migrations"
     }
   ],
+  "vars": {
+    "SHOPIFY_API_KEY": "b3ef8e3d2090793c6a6c1dd517644358",
+    "SHOPIFY_APP_URL": "https://inkly-erp-sync.renovo.workers.dev",
+    "SCOPES": "read_merchant_managed_fulfillment_orders,read_orders,write_merchant_managed_fulfillment_orders"
+  },
   "observability": { "enabled": true }
 }
