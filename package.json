@@ -1,5 +1,5 @@
 {
-  "name": "rabisco-erp",
+  "name": "inkly-erp-sync",
   "private": true,
   "scripts": {
     "build": "react-router build",
