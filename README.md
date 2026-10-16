@@ -4,6 +4,7 @@ A small custom Shopify app, embedded in the admin, that does the integration mer
 
 - Demo store: `inkly-demo.myshopify.com` (development store, fictional products, no order is ever shipped).
 - The ERP is simulated inside the app, behind its own HTTP API, so the whole round trip can be shown without a client's system. Swapping in a real ERP means replacing one client module (see [Connecting a real ERP](#connecting-a-real-erp)).
+- Runs on **Cloudflare Workers with D1** (free plan), in development as well as in production.
 - Built on the official [Shopify app template for React Router](https://github.com/Shopify/shopify-app-template-react-router) (`main-cli`, commit `ea3008d`, MIT), generated with `shopify app init`. The first commit is the untouched template; everything after it is this app.
 
 <!-- SCREENSHOTS -->
@@ -32,6 +33,7 @@ Every step is written to the order's history, which the admin page shows as a ti
 - **Nothing is sent twice.** Duplicate webhooks are counted, logged and ignored; the ERP request is idempotent by `shop/order id`, so a retry after a timeout cannot create a second sales order.
 - **Fulfillment through fulfillment orders.** The app only asks for `read_orders` and the merchant-managed fulfillment order scopes, which is what `fulfillmentCreate` needs for orders shipped from the merchant's own locations.
 - **Polaris web components** (`s-page`, `s-table`, `s-badge`, `s-banner`) from the template, no extra UI library.
+- **Cloudflare Workers instead of a Node server.** The template targets Node with Prisma on a SQLite file. Here `@cloudflare/vite-plugin` runs the same React Router app inside `workerd` (also during `shopify app dev`, so dev and production behave the same), and Prisma keeps its API through the Rust-free client and the D1 driver adapter. Two Workers rules shaped the code: no I/O in the global scope (the Prisma session storage is created on first use, `app/session-storage.server.ts`) and calls to the Worker's own public URL need the `global_fetch_strictly_public` flag (the simulated ERP and its callback). The bundle is about 1 MB gzipped, under the free plan's 3 MB.
 
 ## The simulated ERP
 
@@ -91,7 +93,7 @@ npm run graphql-codegen
 npm run dev
 ```
 
-`npm run dev` is `shopify app dev`: it links the app, starts a tunnel, applies the Prisma migrations to a local SQLite file and prints the URL to install the app on your store. Then create a test order (Orders, Create order, add a product, Collect payment, Mark as paid) and open the app.
+`npm run dev` is `shopify app dev`: it links the app, starts a tunnel, applies the migrations to a local D1 database (`.wrangler/state`) and runs the app in `workerd` through Vite, then prints the URL to install the app on your store. Then create a test order (Orders, Create order, add a product, Collect payment, Mark as paid) and open the app.
 
 Before the first run, the app needs a distribution method in the Dev Dashboard (custom distribution for a single store): Shopify blocks the `orders/create` webhook, even on development stores, until protected customer data access is set up.
 
@@ -107,6 +109,40 @@ npm run typecheck
 
 ```bash
 npm run lint
+```
+
+### Deploy to Cloudflare
+
+Once, create the database and put its id in `wrangler.jsonc` (and the account id, if the login has more than one account):
+
+```bash
+npx wrangler d1 create inkly-erp-sync
+```
+
+```bash
+npm run db:migrate:remote
+```
+
+Set the variables of the Worker (the API key and app URL can be plain vars; the secret must be a secret):
+
+```bash
+npx wrangler secret put SHOPIFY_API_SECRET
+```
+
+Then build and deploy the Worker, point the app at its URL (`application_url` and `redirect_urls` in `shopify.app.toml`) and release the app configuration:
+
+```bash
+npm run deploy:worker
+```
+
+```bash
+npm run deploy
+```
+
+New migrations: change `prisma/schema.prisma`, then generate the SQL against the local database and apply it with wrangler:
+
+```bash
+npx prisma migrate diff --from-local-d1 --to-schema-datamodel prisma/schema.prisma --script -o migrations/0002_name.sql
 ```
 
 ### Environment variables
@@ -128,7 +164,10 @@ app/integration/     the integration: payload mapping, ERP client, order sync se
 app/erp-simulator/   the simulated ERP: API handler, validation, tracking numbers
 app/routes/          webhooks (orders/create, ERP shipments), ERP API, admin pages (orders, order detail, ERP)
 app/ui/              formatting helpers for the admin pages
-prisma/              schema and migrations (sessions, order syncs, history, ERP tables)
+prisma/              Prisma schema (sessions, order syncs, history, ERP tables)
+migrations/          SQL migrations applied to D1 by wrangler
+workers/             Cloudflare Worker entry
+wrangler.jsonc       Worker config: D1 binding, compatibility flags
 test/                vitest: payload mapping, signatures, ERP validation, tracking numbers, shipment notices
 ```
 
