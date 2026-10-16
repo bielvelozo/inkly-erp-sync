@@ -4,344 +4,156 @@ import type {
   HeadersFunction,
   LoaderFunctionArgs,
 } from "react-router";
-import { useFetcher } from "react-router";
+import { useFetcher, useLoaderData } from "react-router";
 import { useAppBridge } from "@shopify/app-bridge-react";
-import { authenticate } from "../shopify.server";
 import { boundary } from "@shopify/shopify-app-react-router/server";
+import { authenticate } from "../shopify.server";
+import {
+  listSyncs,
+  retryFailedSyncs,
+} from "../integration/order-sync.server";
+import { itemCount, type ErpOrderRequest } from "../integration/order-payload";
+import { badgeFor, SyncStatus } from "../integration/status";
+import { formatDateTime, formatMoney, shopTimezone } from "../ui/format.server";
 
 export const loader = async ({ request }: LoaderFunctionArgs) => {
-  await authenticate.admin(request);
+  const { admin, session } = await authenticate.admin(request);
+  const [syncs, timezone] = await Promise.all([
+    listSyncs(session.shop),
+    shopTimezone(admin, session.shop),
+  ]);
 
-  return null;
-};
-
-export const action = async ({ request }: ActionFunctionArgs) => {
-  const { admin } = await authenticate.admin(request);
-  const color = ["Red", "Orange", "Yellow", "Green"][
-    Math.floor(Math.random() * 4)
-  ];
-  const response = await admin.graphql(
-    `#graphql
-      mutation populateProduct($product: ProductCreateInput!) {
-        productCreate(product: $product) {
-          product {
-            id
-            title
-            handle
-            status
-            variants(first: 10) {
-              edges {
-                node {
-                  id
-                  price
-                  barcode
-                  createdAt
-                }
-              }
-            }
-            demoInfo: metafield(namespace: "$app", key: "demo_info") {
-              jsonValue
-            }
-          }
-        }
-      }`,
-    {
-      variables: {
-        product: {
-          title: `${color} Snowboard`,
-          metafields: [
-            {
-              namespace: "$app",
-              key: "demo_info",
-              value: "Created by React Router Template",
-            },
-          ],
-        },
-      },
-    },
-  );
-  const responseJson = await response.json();
-
-  const product = responseJson.data!.productCreate!.product!;
-  const variantId = product.variants.edges[0]!.node!.id!;
-
-  const variantResponse = await admin.graphql(
-    `#graphql
-    mutation shopifyReactRouterTemplateUpdateVariant($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
-      productVariantsBulkUpdate(productId: $productId, variants: $variants) {
-        productVariants {
-          id
-          price
-          barcode
-          createdAt
-        }
-      }
-    }`,
-    {
-      variables: {
-        productId: product.id,
-        variants: [{ id: variantId, price: "100.00" }],
-      },
-    },
-  );
-
-  const variantResponseJson = await variantResponse.json();
-
-  const metaobjectResponse = await admin.graphql(
-    `#graphql
-    mutation shopifyReactRouterTemplateUpsertMetaobject($handle: MetaobjectHandleInput!, $values: JSON!) {
-      metaobjectUpsert(handle: $handle, values: $values) {
-        metaobject {
-          id
-          handle
-          values
-        }
-        userErrors {
-          field
-          message
-        }
-      }
-    }`,
-    {
-      variables: {
-        handle: {
-          type: "$app:example",
-          handle: "demo-entry",
-        },
-        values: {
-          title: "Demo Entry",
-          description:
-            "This metaobject was created by the Shopify app template to demonstrate the metaobject API.",
-        },
-      },
-    },
-  );
-
-  const metaobjectResponseJson = await metaobjectResponse.json();
+  const rows = syncs.map((sync) => {
+    const order = JSON.parse(sync.payload) as ErpOrderRequest;
+    return {
+      id: sync.id,
+      orderName: sync.orderName,
+      placedAt: formatDateTime(sync.orderCreatedAt, timezone),
+      items: itemCount(order),
+      total: formatMoney(order.total, order.currency),
+      status: sync.status,
+      erpNumber: sync.erpNumber,
+      trackingNumber: sync.trackingNumber,
+      lastError: sync.lastError,
+    };
+  });
 
   return {
-    product: responseJson!.data!.productCreate!.product,
-    variant:
-      variantResponseJson!.data!.productVariantsBulkUpdate!.productVariants,
-    metaobject: metaobjectResponseJson!.data!.metaobjectUpsert!.metaobject,
+    rows,
+    failed: rows.filter((row) => row.status === SyncStatus.Failed).length,
   };
 };
 
-export default function Index() {
-  const fetcher = useFetcher<typeof action>();
+export const action = async ({ request }: ActionFunctionArgs) => {
+  const { session } = await authenticate.admin(request);
+  return retryFailedSyncs(session.shop);
+};
 
+export default function Orders() {
+  const { rows, failed } = useLoaderData<typeof loader>();
+  const retry = useFetcher<typeof action>();
   const shopify = useAppBridge();
-  const isLoading =
-    ["loading", "submitting"].includes(fetcher.state) &&
-    fetcher.formMethod === "POST";
+  const retrying = retry.state !== "idle";
 
   useEffect(() => {
-    if (fetcher.data?.product?.id) {
-      shopify.toast.show("Product created");
+    if (retry.state === "idle" && retry.data) {
+      const { retried, recovered } = retry.data;
+      shopify.toast.show(
+        recovered === retried
+          ? `${recovered} of ${retried} sent to the ERP`
+          : `${recovered} of ${retried} sent; the ERP is still failing`,
+        { isError: recovered < retried },
+      );
     }
-  }, [fetcher.data?.product?.id, shopify]);
-
-  const generateProduct = () => fetcher.submit({}, { method: "POST" });
+  }, [retry.state, retry.data, shopify]);
 
   return (
-    <s-page heading="Shopify app template">
-      <s-button slot="primary-action" onClick={generateProduct}>
-        Generate a product
+    <s-page heading="Orders sent to the ERP">
+      <s-button slot="primary-action" href="/app/erp">
+        Open simulated ERP
       </s-button>
 
-      <s-section heading="Congrats on creating a new Shopify app 🎉">
-        <s-paragraph>
-          This embedded app template uses{" "}
-          <s-link
-            href="https://shopify.dev/docs/apps/tools/app-bridge"
-            target="_blank"
-          >
-            App Bridge
-          </s-link>{" "}
-          interface examples like an{" "}
-          <s-link href="/app/additional">additional page in the app nav</s-link>
-          , as well as an{" "}
-          <s-link
-            href="https://shopify.dev/docs/api/admin-graphql"
-            target="_blank"
-          >
-            Admin GraphQL
-          </s-link>{" "}
-          mutation demo, to provide a starting point for app development.
-        </s-paragraph>
-      </s-section>
-      <s-section heading="Get started with products">
-        <s-paragraph>
-          Generate a product with GraphQL and get the JSON output for that
-          product. Learn more about the{" "}
-          <s-link
-            href="https://shopify.dev/docs/api/admin-graphql/latest/mutations/productCreate"
-            target="_blank"
-          >
-            productCreate
-          </s-link>{" "}
-          mutation in our API references. Includes a product{" "}
-          <s-link
-            href="https://shopify.dev/docs/apps/build/custom-data/metafields"
-            target="_blank"
-          >
-            metafield
-          </s-link>{" "}
-          and{" "}
-          <s-link
-            href="https://shopify.dev/docs/apps/build/custom-data/metaobjects"
-            target="_blank"
-          >
-            metaobject
-          </s-link>
-          .
-        </s-paragraph>
-        <s-stack direction="inline" gap="base">
+      {failed > 0 && (
+        <s-banner
+          tone="critical"
+          heading={`${failed} ${failed === 1 ? "order" : "orders"} did not reach the ERP`}
+        >
+          <s-paragraph>
+            The webhook was received and saved, but the ERP rejected it or did
+            not answer. Nothing is lost: send again when the ERP is back.
+          </s-paragraph>
           <s-button
-            onClick={generateProduct}
-            {...(isLoading ? { loading: true } : {})}
+            slot="secondary-actions"
+            onClick={() => retry.submit({}, { method: "POST" })}
+            {...(retrying ? { loading: true } : {})}
           >
-            Generate a product
+            Retry failed orders
           </s-button>
-          {fetcher.data?.product && (
-            <s-button
-              onClick={() => {
-                shopify.intents.invoke?.("edit:shopify/Product", {
-                  value: fetcher.data?.product?.id,
-                });
-              }}
-              target="_blank"
-              variant="tertiary"
-            >
-              Edit product
-            </s-button>
-          )}
-        </s-stack>
-        {fetcher.data?.product && (
-          <s-section heading="productCreate mutation">
-            <s-stack direction="block" gap="base">
-              <s-box
-                padding="base"
-                borderWidth="base"
-                borderRadius="base"
-                background="subdued"
-              >
-                <pre
-                  style={{
-                    margin: 0,
-                    whiteSpace: "pre-wrap",
-                    wordBreak: "break-word",
-                  }}
-                >
-                  <code>{JSON.stringify(fetcher.data.product, null, 2)}</code>
-                </pre>
-              </s-box>
+        </s-banner>
+      )}
 
-              <s-heading>productVariantsBulkUpdate mutation</s-heading>
-              <s-box
-                padding="base"
-                borderWidth="base"
-                borderRadius="base"
-                background="subdued"
-              >
-                <pre
-                  style={{
-                    margin: 0,
-                    whiteSpace: "pre-wrap",
-                    wordBreak: "break-word",
-                  }}
-                >
-                  <code>{JSON.stringify(fetcher.data.variant, null, 2)}</code>
-                </pre>
-              </s-box>
-
-              <s-heading>metaobjectUpsert mutation</s-heading>
-              <s-box
-                padding="base"
-                borderWidth="base"
-                borderRadius="base"
-                background="subdued"
-              >
-                <pre
-                  style={{
-                    margin: 0,
-                    whiteSpace: "pre-wrap",
-                    wordBreak: "break-word",
-                  }}
-                >
-                  <code>
-                    {JSON.stringify(fetcher.data.metaobject, null, 2)}
-                  </code>
-                </pre>
-              </s-box>
-            </s-stack>
-          </s-section>
+      <s-section padding="none" accessibilityLabel="Orders">
+        {rows.length === 0 ? (
+          <s-empty-state heading="No orders yet">
+            <s-paragraph>
+              Every new order in this store is sent to the ERP as soon as
+              Shopify creates it. Place a test order (Orders, Create order,
+              Mark as paid) and it shows up here.
+            </s-paragraph>
+          </s-empty-state>
+        ) : (
+          <s-table>
+            <s-table-header-row>
+              <s-table-header listSlot="primary">Order</s-table-header>
+              <s-table-header>Placed</s-table-header>
+              <s-table-header format="numeric">Items</s-table-header>
+              <s-table-header format="currency">Total</s-table-header>
+              <s-table-header listSlot="secondary">Status</s-table-header>
+              <s-table-header>ERP order</s-table-header>
+              <s-table-header>Tracking</s-table-header>
+            </s-table-header-row>
+            <s-table-body>
+              {rows.map((row) => {
+                const badge = badgeFor(row.status);
+                return (
+                  <s-table-row key={row.id} clickDelegate={`sync-${row.id}`}>
+                    <s-table-cell>
+                      <s-link id={`sync-${row.id}`} href={`/app/orders/${row.id}`}>
+                        {row.orderName}
+                      </s-link>
+                    </s-table-cell>
+                    <s-table-cell>{row.placedAt}</s-table-cell>
+                    <s-table-cell>{row.items}</s-table-cell>
+                    <s-table-cell>{row.total}</s-table-cell>
+                    <s-table-cell>
+                      <s-badge tone={badge.tone}>{badge.label}</s-badge>
+                    </s-table-cell>
+                    <s-table-cell>{row.erpNumber ?? "—"}</s-table-cell>
+                    <s-table-cell>{row.trackingNumber ?? "—"}</s-table-cell>
+                  </s-table-row>
+                );
+              })}
+            </s-table-body>
+          </s-table>
         )}
       </s-section>
 
-      <s-section slot="aside" heading="App template specs">
-        <s-paragraph>
-          <s-text>Framework: </s-text>
-          <s-link href="https://reactrouter.com/" target="_blank">
-            React Router
-          </s-link>
-        </s-paragraph>
-        <s-paragraph>
-          <s-text>Interface: </s-text>
-          <s-link
-            href="https://shopify.dev/docs/api/app-home/using-polaris-components"
-            target="_blank"
-          >
-            Polaris web components
-          </s-link>
-        </s-paragraph>
-        <s-paragraph>
-          <s-text>API: </s-text>
-          <s-link
-            href="https://shopify.dev/docs/api/admin-graphql"
-            target="_blank"
-          >
-            GraphQL
-          </s-link>
-        </s-paragraph>
-        <s-paragraph>
-          <s-text>Custom data: </s-text>
-          <s-link
-            href="https://shopify.dev/docs/apps/build/custom-data"
-            target="_blank"
-          >
-            Metafields &amp; metaobjects
-          </s-link>
-        </s-paragraph>
-        <s-paragraph>
-          <s-text>Database: </s-text>
-          <s-link href="https://www.prisma.io/" target="_blank">
-            Prisma
-          </s-link>
-        </s-paragraph>
-      </s-section>
-
-      <s-section slot="aside" heading="Next steps">
-        <s-unordered-list>
+      <s-section slot="aside" heading="How it works">
+        <s-ordered-list>
           <s-list-item>
-            Build an{" "}
-            <s-link
-              href="https://shopify.dev/docs/apps/getting-started/build-app-example"
-              target="_blank"
-            >
-              example app
-            </s-link>
+            Shopify calls the app with the orders/create webhook. Only the
+            order number, totals and line items are kept: no customer name,
+            email or address.
           </s-list-item>
           <s-list-item>
-            Explore Shopify&apos;s API with{" "}
-            <s-link
-              href="https://shopify.dev/docs/apps/tools/graphiql-admin-api"
-              target="_blank"
-            >
-              GraphiQL
-            </s-link>
+            The app posts the lines to the ERP API. A failure is saved with the
+            reason and can be sent again, and the same order never goes twice.
           </s-list-item>
-        </s-unordered-list>
+          <s-list-item>
+            When the ERP ships, it calls the app back with the tracking number,
+            and the app fulfills the order in Shopify.
+          </s-list-item>
+        </s-ordered-list>
       </s-section>
     </s-page>
   );

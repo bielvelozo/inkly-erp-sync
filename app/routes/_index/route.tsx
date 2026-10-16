@@ -30,9 +30,10 @@ export default function App() {
   return (
     <div className={styles.index}>
       <div className={styles.content}>
-        <h1 className={styles.heading}>A short heading about [your app]</h1>
+        <h1 className={styles.heading}>Inkly ERP Sync</h1>
         <p className={styles.text}>
-          A tagline about [your app] that describes your value proposition.
+          Sends every new Shopify order to the ERP and brings the tracking
+          number back to the order.
         </p>
         {showForm && (
           <Form className={styles.form} method="post">
@@ -48,16 +49,17 @@ export default function App() {
         )}
         <ul className={styles.list}>
           <li>
-            <strong>Product feature</strong>. Some detail about your feature and
-            its benefit to your customer.
+            <strong>Orders to the ERP</strong>. Line items, totals and
+            personalization leave Shopify the moment the order is created, with
+            no customer personal data.
           </li>
           <li>
-            <strong>Product feature</strong>. Some detail about your feature and
-            its benefit to your customer.
+            <strong>Nothing lost</strong>. When the ERP is down the order is
+            kept with the reason and sent again, never twice.
           </li>
           <li>
-            <strong>Product feature</strong>. Some detail about your feature and
-            its benefit to your customer.
+            <strong>Tracking back</strong>. When the ERP ships, the order is
+            fulfilled in Shopify with the tracking number.
           </li>
         </ul>
       </div>

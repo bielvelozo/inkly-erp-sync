@@ -32,3 +32,62 @@ model Session {
   refreshToken        String?
   refreshTokenExpires DateTime?
 }
+
+model OrderSync {
+  id                Int         @id @default(autoincrement())
+  shop              String
+  orderId           String
+  orderName         String
+  orderCreatedAt    DateTime
+  payload           String
+  status            String      @default("pending")
+  attempts          Int         @default(0)
+  webhookDeliveries Int         @default(1)
+  lastError         String?
+  erpNumber         String?
+  trackingNumber    String?
+  trackingCompany   String?
+  trackingUrl       String?
+  fulfillmentId     String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  events            SyncEvent[]
+
+  @@unique([shop, orderId])
+  @@index([shop, createdAt])
+}
+
+model SyncEvent {
+  id          Int       @id @default(autoincrement())
+  orderSyncId Int
+  orderSync   OrderSync @relation(fields: [orderSyncId], references: [id], onDelete: Cascade)
+  kind        String
+  message     String
+  httpStatus  Int?
+  createdAt   DateTime  @default(now())
+
+  @@index([orderSyncId, createdAt])
+}
+
+model ErpOrder {
+  id             Int       @id @default(autoincrement())
+  idempotencyKey String    @unique
+  shop           String
+  reference      String
+  externalId     String
+  payload        String
+  callbackUrl    String
+  status         String    @default("received")
+  trackingNumber String?
+  receivedAt     DateTime  @default(now())
+  shippedAt      DateTime?
+  notifiedAt     DateTime?
+  notifyError    String?
+
+  @@index([shop, receivedAt])
+}
+
+model ErpSettings {
+  shop    String  @id
+  offline Boolean @default(false)
+}

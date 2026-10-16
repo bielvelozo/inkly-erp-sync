@@ -1,0 +1,35 @@
+{
+  "id": 6912345678901,
+  "admin_graphql_api_id": "gid://shopify/Order/6912345678901",
+  "name": "#1004",
+  "created_at": "2026-10-15T21:14:03-04:00",
+  "currency": "USD",
+  "total_price": "57.00",
+  "line_items": [
+    {
+      "id": 15934567890123,
+      "title": "Personalized Mug",
+      "variant_title": "White",
+      "sku": "MUG-WHITE",
+      "quantity": 1,
+      "price": "24.00",
+      "properties": [
+        { "name": "Text", "value": "Good morning, Ana" },
+        { "name": "Font", "value": "Pacifico" },
+        { "name": "Color", "value": "#e4572e" },
+        { "name": "_Preview", "value": "https://cdn.shopify.com/s/files/preview.png" },
+        { "name": "_Position", "value": "bottom" },
+        { "name": "Photo", "value": "" }
+      ]
+    },
+    {
+      "id": 15934567890124,
+      "title": "Gift Box",
+      "variant_title": null,
+      "sku": "",
+      "quantity": 3,
+      "price": "11.00",
+      "properties": []
+    }
+  ]
+}
