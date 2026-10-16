@@ -4,10 +4,16 @@ A small custom Shopify app, embedded in the admin, that does the integration mer
 
 - Demo store: `inkly-demo.myshopify.com` (development store, fictional products, no order is ever shipped).
 - The ERP is simulated inside the app, behind its own HTTP API, so the whole round trip can be shown without a client's system. Swapping in a real ERP means replacing one client module (see [Connecting a real ERP](#connecting-a-real-erp)).
-- Runs on **Cloudflare Workers with D1** (free plan), in development as well as in production.
+- Runs on **Cloudflare Workers with D1** (free plan), in development as well as in production. The demo store's copy is installed as a custom app and served by the Worker: a test order there reached the ERP in under half a second, and shipping it fulfilled the order in Shopify with the tracking number.
 - Built on the official [Shopify app template for React Router](https://github.com/Shopify/shopify-app-template-react-router) (`main-cli`, commit `ea3008d`, MIT), generated with `shopify app init`. The first commit is the untouched template; everything after it is this app.
 
-<!-- SCREENSHOTS -->
+Order #1001 on the demo store, from the webhook to the tracking number:
+
+| Orders sent to the ERP | The simulated ERP |
+|---|---|
+| ![Orders page in the app: order #1001, shipped, with the ERP's sales order number and the tracking number](docs/screenshots/orders.png) | ![Simulated ERP page: API online, sales order SO-00001 for #1001, store notified](docs/screenshots/simulated-erp.png) |
+| **The order in the app** | **Back in Shopify** |
+| ![Order detail: summary, items sent, history from webhook to fulfillment, and the JSON sent to the ERP](docs/screenshots/order-detail.png) | ![Shopify order #1001 fulfilled with the tracking number from the ERP](docs/screenshots/shopify-fulfilled.png) |
 
 ## How it works
 
@@ -51,11 +57,11 @@ Content-Type: application/json
   "externalId": "gid://shopify/Order/6912345678901",
   "placedAt": "2026-10-15T21:14:03-04:00",
   "currency": "USD",
-  "total": "57.00",
+  "total": "18.00",
   "callbackUrl": "https://<app>/webhooks/erp/shipments",
   "items": [
     { "sku": "MUG-WHITE", "title": "Custom mug", "variant": "White", "quantity": 1,
-      "unitPrice": "24.00", "customization": { "Text": "Good morning, Ana", "Font": "Pacifico", "Text color": "Orange" } }
+      "unitPrice": "18.00", "customization": { "Text": "Good morning, Ana", "Font": "Pacifico", "Text color": "Orange" } }
   ]
 }
 ```
@@ -93,7 +99,7 @@ npm run graphql-codegen
 npm run dev
 ```
 
-`npm run dev` is `shopify app dev`: it links the app, starts a tunnel, applies the migrations to a local D1 database (`.wrangler/state`) and runs the app in `workerd` through Vite, then prints the URL to install the app on your store. Then create a test order (Orders, Create order, add a product, Collect payment, Mark as paid) and open the app.
+`npm run dev` is `shopify app dev`: it links the app, starts a tunnel, applies the migrations to a local D1 database (`.wrangler/state`) and runs the app in `workerd` through Vite, then prints the URL to install the app on your store. Then create a test order (Orders, Create order, Product, pick one, Mark as paid, Create order) and open the app. Orders created in the admin carry no line item properties; to see the personalization fields reach the ERP, place the order through the storefront with Shopify's test payment.
 
 Before the first run, the app needs a distribution method in the Dev Dashboard (custom distribution for a single store): Shopify blocks the `orders/create` webhook, even on development stores, until protected customer data access is set up.
 
@@ -169,6 +175,7 @@ migrations/          SQL migrations applied to D1 by wrangler
 workers/             Cloudflare Worker entry
 wrangler.jsonc       Worker config: D1 binding, compatibility flags
 test/                vitest: payload mapping, signatures, ERP validation, tracking numbers, shipment notices
+docs/screenshots/    the screenshots above, taken on the demo store
 ```
 
 Author: Gabriel Velozo.
