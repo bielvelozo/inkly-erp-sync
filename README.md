@@ -7,6 +7,8 @@ A small custom Shopify app, embedded in the admin, that does the integration mer
 - Runs on **Cloudflare Workers with D1** (free plan), in development as well as in production. The demo store's copy is installed as a custom app and served by the Worker: a test order there reached the ERP in under half a second, and shipping it fulfilled the order in Shopify with the tracking number.
 - Built on the official [Shopify app template for React Router](https://github.com/Shopify/shopify-app-template-react-router) (`main-cli`, commit `ea3008d`, MIT), generated with `shopify app init`. The first commit is the untouched template; everything after it is this app.
 
+![The flow, animated: a Shopify order reaches the app, goes to the ERP as a sales order, ships, and the tracking number fulfills the order back in Shopify](docs/demo.gif)
+
 Order #1001 on the demo store, from the webhook to the tracking number:
 
 | Orders sent to the ERP | The simulated ERP |
